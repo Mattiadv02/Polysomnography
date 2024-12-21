@@ -1,0 +1,9 @@
+Considera che dalla riga 370 a 555 riguarda il conteggio degli eventi e dei tipi di eventi presenti quindi modificare il path.
+Dalla riga 559 a 633 controlla il file csv per vedere se gli eventi rilevati dal codice possono corrispondere a quelli riportati 
+e mostrati a video dal codice citato al rigo superiore.
+
+Le soglie da apporre sono:
+- 4 corretto = apnea 40% quindi 0.4, ipopnea 15% quindi 0.15
+- 7 corretto = apnea 46% quindi 0.46, ipopnea 30% quindi 0.30
+- 8 corretto = apnea 31.5% quindi 0.315, ipopnea 32.5% quindi 0.325
+- 10 corretto = apnea 62.5% quindi 0.625, ipopnea 50.3% quindi 0.503
