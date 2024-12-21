@@ -189,8 +189,8 @@ for file_name in os.listdir(base_dir):
         create_combined_csv(edf_data, events, corrected_events, output_csv_path)
 
 
-################################################################
-# #SPETTROGRAMMI in immagini
+# ################################################################
+# # #SPETTROGRAMMI in immagini
 
 import pandas as pd
 import numpy as np
@@ -281,8 +281,8 @@ def genera_spettrogrammi_da_csv(file_path, fs=1.0, durata=28800):
 # Esempio di utilizzo
 genera_spettrogrammi_da_csv("C:/Users/Utente/Desktop/Polysomnography/Eventi_Spalmati/output_combined1.csv", fs=100)
 
-################################################################
-#PLOT_SPETTRO COMBO
+# ################################################################
+# #PLOT_SPETTRO COMBO
 
 import pandas as pd
 import numpy as np
@@ -509,7 +509,7 @@ def analizza_eventi(file_path, file_csv_path):
     }
 
     # Stampa dei risultati
-    with open("risultati_eventi_statistiche.csv", "w", newline="") as csvfile:
+    with open("risultati_eventi_statistiche10_cr.csv", "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(["Canale", "Tipo", "Descrizione", "Valore"])
 
@@ -535,7 +535,7 @@ def analizza_eventi(file_path, file_csv_path):
 
 
 # Esempio di utilizzo
-file_path = 'C:/Users/Utente/Desktop/Polysomnography/CheckEdf/Polisonnografie Anonime/1_events.txt'
+file_path = 'C:/Users/Utente/Desktop/Polysomnography/CheckEdf/Polisonnografie Anonime/10_event_corretto.txt'
 file_csv_path = "C:/Users/Utente/Desktop/Polysomnography/Eventi_Spalmati/output_combined1.csv"
 
 conteggi, statistiche, statistiche_csv = analizza_eventi(file_path, file_csv_path)
@@ -556,21 +556,19 @@ for key, value in statistiche_csv.items():
 
 #############################################################################
 #interruzioni ogni 10 secondi
-import pyedflib
 import pandas as pd
 import numpy as np
 
-# Carica il file EDF
-file_path = 'C:/Users/Utente/Desktop/Polysomnography/CheckEdf/Polisonnografie Anonime/1_edf.edf'  # Specifica qui il percorso del file EDF
-edf = pyedflib.EdfReader(file_path)
+# Carica il file CSV
+file_path = 'C:/Users/Utente/Desktop/Polysomnography/Eventi_Spalmati/10_combined.csv'  # Specifica qui il percorso del file CSV
+df = pd.read_csv(file_path)
 
-# Trova il canale "Resp nasal"
-channel_name = "Resp nasal"
-channel_index = edf.getSignalLabels().index(channel_name)
-colonna = edf.readSignal(channel_index)
+# Supponiamo che il CSV abbia una colonna "Resp nasal"
+channel_name = "b'Resp nasal'"
+if channel_name not in df.columns:
+    raise ValueError(f"Colonna '{channel_name}' non trovata nel file CSV")
 
-# Chiude il file EDF dopo aver letto i dati
-edf.close()
+colonna = df[channel_name].values
 
 # Frequenza di campionamento (10 campioni al secondo)
 sampling_rate = 10
@@ -578,17 +576,14 @@ sampling_rate = 10
 # Numero di campioni da scartare (5 minuti)
 start_offset = 5 * 60 * sampling_rate  # 5 minuti = 300 secondi
 
-# Scarta i primi 5 minuti
-colonna_troncata = colonna[start_offset:]
+# Trova i valori massimo e minimo della colonna
+valore_massimo = colonna.max()
+valore_minimo = colonna.min()
+print("Valore massimo:", valore_massimo)
+print("Valore minimo:", valore_minimo)
 
-# Trova e stampa il valore massimo e minimo della colonna troncata
-valore_massimo = colonna_troncata.max()
-valore_minimo = colonna_troncata.min()
-print("Valore massimo (troncato):", valore_massimo)
-print("Valore minimo (troncato):", valore_minimo)
-
-# Normalizza i valori della colonna troncata
-colonna_normalizzata = (colonna_troncata - valore_minimo) / (valore_massimo - valore_minimo)
+# Normalizza i valori della colonna
+colonna_normalizzata = (colonna - valore_minimo) / (valore_massimo - valore_minimo)
 
 # Calcola la media dei valori normalizzati
 media_normalizzata = colonna_normalizzata.mean()
@@ -599,32 +594,77 @@ df_result = pd.DataFrame({"Resp nasal normalizzato": colonna_normalizzata})
 df_result["APNEA"] = False
 df_result["IPOPNEA"] = False
 
-# Parametri per l'analisi
-window_size = 1 * sampling_rate  # Finestra di 10 secondi (100 campioni)
-soglia_apnea = 0.1  # Soglia per apnea
-soglia_ipopnea = 0.3  # Soglia per ipopnea
+# Imposta "APNEA" e "IPOPNEA" a False per i primi 5 minuti
+df_result.loc[:start_offset - 1, ["APNEA", "IPOPNEA"]] = False
 
-# Scansione dei dati troncati
-for start in range(0, len(colonna_normalizzata) - window_size + 1, sampling_rate):
+# Parametri per l'analisi
+window_size = 1 * sampling_rate  # Finestra di 10 secondi
+soglia_apnea = media_normalizzata * 0.625 # Apnea: 30% della media
+soglia_ipopnea = media_normalizzata * 0.503  # Ipopnea: 15% della media
+
+print("Soglia apnea:", soglia_apnea)
+print("Soglia ipopnea:", soglia_ipopnea)
+
+count_IP = 0
+count_AP = 0
+# Scansione dei dati troncati con finestra temporale
+step_size = sampling_rate  # Passo di 1 secondo
+for start in range(start_offset, len(colonna_normalizzata) - window_size + 1, step_size):
     # Calcola la media della finestra corrente
     end = start + window_size
     finestra = colonna_normalizzata[start:end]
     media_temp = finestra.mean()
 
-    # Condizione per apnea: media_temp fuori dalla soglia +- soglia_apnea
+    # Condizione per apnea
     if not (media_normalizzata - soglia_apnea <= media_temp <= media_normalizzata + soglia_apnea):
         df_result.loc[start:end - 1, "APNEA"] = True
+        count_AP = count_AP + 1
 
-    # Condizione per ipopnea: media_temp fuori dalla soglia +- soglia_ipopnea
+    # Condizione per ipopnea
     if not (media_normalizzata - soglia_ipopnea <= media_temp <= media_normalizzata + soglia_ipopnea):
         df_result.loc[start:end - 1, "IPOPNEA"] = True
+        count_IP = count_IP + 1
 
 # Salva il DataFrame aggiornato con le colonne APNEA e IPOPNEA in un nuovo CSV
 output_path = 'C:/Users/Utente/Desktop/Polysomnography/Eventi_Spalmati/valori_normalizzati_con_eventi.csv'
 df_result.to_csv(output_path, index=False)
 
+print(f"IPOPNEE: ", count_IP, "\nAPNEE: ", count_AP, "\nTOTALE: ", count_AP + count_IP)
 print(f"Analisi completata. I risultati sono stati salvati in {output_path}")
 
+# # Creazione del file di log per apnea e ipopnea
+# output_txt_path = 'C:/Users/Utente/Desktop/Polysomnography/Eventi_Spalmati/report_eventi.txt'
+#
+# with open(output_txt_path, 'w') as file:
+#     # Conteggio delle corrispondenze
+#     apnea_matches = df_result["APNEA"].sum()
+#     ipopnea_matches = df_result["IPOPNEA"].sum()
+#
+#     # Scrittura dell'intestazione
+#     file.write("Report degli eventi rilevati\n")
+#     file.write("============================\n")
+#     file.write(f"Numero di finestre con Apnea rilevate: {apnea_matches}\n")
+#     file.write(f"Numero di finestre con Ipopnea rilevate: {ipopnea_matches}\n\n")
+#
+#     # Dettagli delle finestre con Apnea
+#     file.write("Dettagli delle finestre con Apnea:\n")
+#     apnea_indices = df_result[df_result["APNEA"]].index
+#     for i in apnea_indices:
+#         inizio = i / sampling_rate  # Secondi
+#         fine = (i + window_size - 1) / sampling_rate  # Secondi
+#         file.write(f"  - Inizio: {inizio:.2f}s, Fine: {fine:.2f}s\n")
+#
+#     file.write("\n")
+#
+#     # Dettagli delle finestre con Ipopnea
+#     file.write("Dettagli delle finestre con Ipopnea:\n")
+#     ipopnea_indices = df_result[df_result["IPOPNEA"]].index
+#     for i in ipopnea_indices:
+#         inizio = i / sampling_rate  # Secondi
+#         fine = (i + window_size - 1) / sampling_rate  # Secondi
+#         file.write(f"  - Inizio: {inizio:.2f}s, Fine: {fine:.2f}s\n")
+#
+# print(f"Report eventi salvato in {output_txt_path}")
 
 #########################################################################
 # PLOT RESP_NASAL DEVIAZIONE STANDARD A CAMPANA
